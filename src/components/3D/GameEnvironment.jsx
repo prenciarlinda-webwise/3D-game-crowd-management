@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import useGameStore from '../../store/gameStore'
 import FairStand from './FairStand'
 import PlayerAvatar from './PlayerAvatar'
@@ -7,6 +7,11 @@ import AnimatedCrowdScene from './AnimatedCrowdScene'
 import Floor from './Floor'
 import Carousel from './Carousel'
 import FairEnvironment from './FairEnvironment'
+import FerrisWheel from './FerrisWheel'
+import InteractiveCarousel from './InteractiveCarousel'
+import Queue from './Queue'
+import Street from './Street'
+import ChristmasPath from './ChristmasPath'
 
 function GameEnvironment() {
   const { currentScenario, scenarios, avatar, recordChoice, nextScenario } = useGameStore()
@@ -14,16 +19,23 @@ function GameEnvironment() {
   const [standOpen, setStandOpen] = useState(null)
   const [avatarTarget, setAvatarTarget] = useState(null)
   const [startTime, setStartTime] = useState(Date.now())
-  
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const transitionLock = useRef(false)
+
   const scenario = scenarios[currentScenario]
 
   // Debug logging
-  console.log('GameEnvironment Render - Total Scenarios:', scenarios.length, 'Current Scenario:', currentScenario, 'Scenario Type:', scenario?.type, 'Scenario:', scenario)
+  console.log('🎮 Scenario', currentScenario + 1, 'of', scenarios.length, '- Type:', scenario?.type)
 
-  // Reset start time when scenario changes
+  // Reset states when scenario changes
   useEffect(() => {
     setStartTime(Date.now())
-    console.log('🎮 New scenario started:', currentScenario, scenario?.type)
+    setSelectedStand(null)
+    setStandOpen(null)
+    setAvatarTarget(null)
+    setIsTransitioning(false)
+    transitionLock.current = false
+    console.log('✅ Scenario', currentScenario + 1, 'ready:', scenario?.type)
   }, [currentScenario])
 
   // Safety check
@@ -42,48 +54,87 @@ function GameEnvironment() {
   }
 
   const handleStandClick = (choice, standPosition) => {
-    if (selectedStand) return // Prevent multiple clicks
+    // Prevent clicks during transition or if already selected
+    if (selectedStand || isTransitioning || transitionLock.current) {
+      console.log('⚠️ Click ignored - already processing')
+      return
+    }
 
+    console.log('🖱️ Stand clicked:', choice)
     const timeToDecide = Date.now() - startTime
-    
+
     // Record the choice
     recordChoice(scenario.id, choice, timeToDecide)
-    
+
     // Mark stand as selected
     setSelectedStand(choice)
     setStandOpen(choice)
-    
-    // Set avatar target to walk to the stand
-    const targetPos = [standPosition[0], 0, standPosition[2] + 1.5]
+
+    // Calculate target position based on scenario type
+    let targetPos
+
+    if (scenario.type === 'carnival-attractions') {
+      // Stop at the BACK of the queue (queue starts at z=2, extends back)
+      const queueSize = choice === 'ferris-wheel'
+        ? (scenario.leftAttraction?.queueSize || 10)
+        : (scenario.rightAttraction?.queueSize || 2)
+      const queueLength = Math.ceil(queueSize / 2) * 0.7 + 1
+      targetPos = [standPosition[0], 0, 2 + queueLength + 1]
+    } else if (scenario.type === 'street-width') {
+      // Stop at the entrance of the street (arch is at z=2)
+      targetPos = [standPosition[0], 0, 3.5]
+    } else if (scenario.type === 'christmas-lights') {
+      // Stop at the entrance of the path (now bigger like streets)
+      targetPos = [standPosition[0], 0, 3.5]
+    } else {
+      // Default: walk close to the stand
+      targetPos = [standPosition[0], 0, standPosition[2] + 1.5]
+    }
+
+    console.log('🎯 Avatar walking to:', targetPos)
     setAvatarTarget(targetPos)
   }
 
   const handleAvatarReachTarget = () => {
-    // Wait 3 seconds at the stand, then return to middle
+    console.log('🚶 Avatar reached destination, waiting 3 seconds...')
+    // Wait 3 seconds at the destination, then return to starting position
     setTimeout(() => {
-      // Set target back to starting position
-      setAvatarTarget([0, 0, 5])
+      console.log('🔙 Avatar returning to start')
+      setAvatarTarget([0, 0, 8]) // Return to starting position (further back)
     }, 3000)
   }
 
   const handleAvatarReturnToMiddle = () => {
-    // Reset states and move to next scenario
-    setSelectedStand(null)
-    setStandOpen(null)
-    setAvatarTarget(null)
-    nextScenario()
+    // Prevent double-triggering with a lock
+    if (transitionLock.current) {
+      console.log('⚠️ Transition already in progress, ignoring')
+      return
+    }
+    transitionLock.current = true
+    setIsTransitioning(true)
+
+    console.log('✨ Moving to next scenario...')
+
+    // Small delay before advancing to ensure clean state
+    setTimeout(() => {
+      nextScenario()
+    }, 100)
   }
+
+  // Check if we should show the decorative elements (not for new scenarios)
+  const showDecorativeElements = !['carnival-attractions', 'street-width', 'christmas-lights'].includes(scenario.type)
 
   return (
     <group>
       <Floor />
-      <FairEnvironment />
-      <Carousel />
+      {showDecorativeElements && <FairEnvironment />}
+      {showDecorativeElements && <Carousel />}
       
-      {/* Player Avatar */}
-      {avatar && (
-        <PlayerAvatar 
-          avatarType={avatar.id} 
+      {/* Player Avatar - key forces re-mount on scenario change for clean state */}
+      {avatar && !isTransitioning && (
+        <PlayerAvatar
+          key={`avatar-scenario-${currentScenario}`}
+          avatarType={avatar.id}
           targetPosition={avatarTarget}
           onReachTarget={handleAvatarReachTarget}
           onReturnToMiddle={handleAvatarReturnToMiddle}
@@ -143,27 +194,105 @@ function GameEnvironment() {
       {scenario.type === 'animated-crowd' && scenario.leftStand && scenario.rightStand && (
         <>
           {/* Left stand */}
-          <FairStand 
-            position={[-3.5, 0, 0]} 
-            color="#8B4513" 
+          <FairStand
+            position={[-3.5, 0, 0]}
+            color="#8B4513"
             choice="left"
             onStandClick={handleStandClick}
             isSelected={standOpen === 'left'}
           />
-          
+
           {/* Right stand */}
-          <FairStand 
-            position={[3.5, 0, 0]} 
-            color="#8B4513" 
+          <FairStand
+            position={[3.5, 0, 0]}
+            color="#8B4513"
             choice="right"
             onStandClick={handleStandClick}
             isSelected={standOpen === 'right'}
           />
 
           {/* Animated NPCs arriving at stands */}
-          <AnimatedCrowdScene 
+          <AnimatedCrowdScene
             leftStandConfig={scenario.leftStand}
             rightStandConfig={scenario.rightStand}
+          />
+        </>
+      )}
+
+      {scenario.type === 'carnival-attractions' && scenario.leftAttraction && scenario.rightAttraction && (
+        <>
+          {/* Ferris Wheel on the left with long queue */}
+          <group>
+            <FerrisWheel
+              position={[-5, 0, -2]}
+              onClick={handleStandClick}
+              isSelected={standOpen === 'ferris-wheel'}
+              choice="ferris-wheel"
+            />
+            <Queue
+              position={[-5, 0, 2]}
+              size={scenario.leftAttraction?.queueSize || 10}
+              direction="back"
+            />
+          </group>
+
+          {/* Carousel on the right with short queue */}
+          <group>
+            <InteractiveCarousel
+              position={[5, 0, -2]}
+              onClick={handleStandClick}
+              isSelected={standOpen === 'carousel'}
+              choice="carousel"
+            />
+            <Queue
+              position={[5, 0, 2]}
+              size={scenario.rightAttraction?.queueSize || 2}
+              direction="back"
+            />
+          </group>
+        </>
+      )}
+
+      {scenario.type === 'street-width' && scenario.leftStreet && scenario.rightStreet && (
+        <>
+          {/* Narrow street on the left */}
+          <Street
+            position={[-5, 0, 0]}
+            width="narrow"
+            onClick={handleStandClick}
+            isSelected={standOpen === 'narrow'}
+            choice="narrow"
+          />
+
+          {/* Wide street on the right */}
+          <Street
+            position={[5, 0, 0]}
+            width="wide"
+            onClick={handleStandClick}
+            isSelected={standOpen === 'wide'}
+            choice="wide"
+          />
+        </>
+      )}
+
+      {scenario.type === 'christmas-lights' && scenario.leftPath && scenario.rightPath && (
+        <>
+          {/* Path WITH Christmas lights on the left */}
+          <ChristmasPath
+            position={[-5.5, 0, 0]}
+            hasLights={true}
+            onClick={handleStandClick}
+            isSelected={standOpen === 'lights'}
+            choice="lights"
+          />
+
+          {/* Path WITHOUT Christmas lights on the right */}
+          <ChristmasPath
+            position={[5.5, 0, 0]}
+            hasLights={false}
+            onClick={handleStandClick}
+            isSelected={standOpen === 'no-lights'}
+            choice="no-lights"
           />
         </>
       )}

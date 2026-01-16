@@ -13,12 +13,13 @@
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.97);
   padding: 20px 30px;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   pointer-events: auto;
-  max-width: 500px;
+  max-width: 600px;
+  min-width: 400px;
   text-align: center;
 }
 
@@ -29,28 +30,38 @@
 }
 
 .scenario-info h3 {
-  margin: 0 0 10px 0;
-  color: #333;
-  font-size: 18px;
+  margin: 0 0 12px 0;
+  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.scenario-info p {
+.scenario-description {
   margin: 0 0 15px 0;
-  color: #555;
-  font-size: 20px;
-  font-weight: 600;
+  color: #333;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: left;
 }
 
 .instructions {
-  padding-top: 10px;
-  border-top: 1px solid #ddd;
+  padding-top: 12px;
+  border-top: 2px solid #e0e0e0;
+  background: #f8f9fa;
+  margin: 0 -30px -20px -30px;
+  padding: 15px 30px;
+  border-radius: 0 0 12px 12px;
 }
 
-.instructions p {
+.scenario-instruction {
   margin: 0;
-  color: #777;
-  font-size: 14px;
-  font-style: italic;
+  color: #27ae60;
+  font-size: 15px;
+  font-weight: 600;
+  font-style: normal;
 }
 
 .summary {
